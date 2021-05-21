@@ -18,7 +18,7 @@ DHT11_PIN = os.getenv("DHT11_PIN", 24)
 
 CONVERT_TEMP_TO_F = True
 SAMPLE_SIZE = 10
-LOG_IF_CHANGED_BY = 0.05
+LOG_IF_CHANGED_BY = 0.1
 LOG_IF_TEMPERATURE_CHANGED = True
 LOG_IF_HUMIDITY_CHANGED = False
 
@@ -33,23 +33,29 @@ if CSV_OUT_FILE_NAME:
     with open(CSV_OUT_FILE_NAME, "w") as c:
         c.write("timestamp,temperature,humidity")
 
-
-def show_consts():
-    print("-"*40)
-    print("DHT11_PIN = %s" % eval("DHT11_PIN"))
-    print("CONVERT_TEMP_TO_F = %s" % eval("CONVERT_TEMP_TO_F"))
-    print("SAMPLE_SIZE = %s" % eval("SAMPLE_SIZE"))
-    print("LOG_IF_CHANGED_BY = %s" % eval("LOG_IF_CHANGED_BY"))
-    print("LOG_IF_HUMIDITY_CHANGED = %s" % eval("LOG_IF_HUMIDITY_CHANGED"))
-    print("LOG_IF_TEMPERATURE_CHANGED = %s" % eval("LOG_IF_TEMPERATURE_CHANGED"))
-    print("CSV_OUT_FILE_NAME = %s" % eval("CSV_OUT_FILE_NAME"))
-    print("-"*40)
-
 IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
 IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
 IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
 # Force this const to False to turn off streaming to InitialState
 SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
+
+
+def show_consts():
+    print("-"*40)
+    print("DHT11_PIN = %s" % DHT11_PIN)
+    print("CONVERT_TEMP_TO_F = %s" % CONVERT_TEMP_TO_F)
+    print("SAMPLE_SIZE = %s" % SAMPLE_SIZE)
+    print("LOG_IF_CHANGED_BY = %s" % LOG_IF_CHANGED_BY)
+    print("LOG_IF_HUMIDITY_CHANGED = %s" % LOG_IF_HUMIDITY_CHANGED)
+    print("LOG_IF_TEMPERATURE_CHANGED = %s" % LOG_IF_TEMPERATURE_CHANGED)
+    print("CSV_OUT_FILE_NAME = %s" % CSV_OUT_FILE_NAME)
+    print("IS_BUCKET_NAME = %s" % IS_BUCKET_NAME)
+    print("IS_BUCKET_KEY = %s" % (("%s********%s" % (IS_BUCKET_KEY[:3], IS_BUCKET_KEY[-1:])) if IS_BUCKET_KEY else ""))
+    print("IS_ACCESS_KEY = %s" % (("%s******************************%s" % (IS_ACCESS_KEY[:3], IS_ACCESS_KEY[-3:])) if IS_ACCESS_KEY else ""))
+    print("SKIP_IS_STREAM = %s" % SKIP_IS_STREAM)
+    print("-"*40)
+
+
 
 def c2f(c):
     return (c * 9/5) + 32
