@@ -9,7 +9,7 @@ Install the Raspbian OS.  Using the OS without the Desktop version appears to be
 
 ### Reading data 
 1. `sudo apt-get update && sudo apt-get upgrade`
-2. `sudo install -y git python3-pip screen`
+2. `sudo apt-get install -y git python3-pip screen`
 3. `git clone https://github.com/htquach/RPi-IoT`
 4. `cd RPi-IoT/`
 5. `pip3 install -r requirements.txt`
