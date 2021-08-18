@@ -22,3 +22,13 @@ Install the Raspbian OS.  Using the OS without the Desktop version appears to be
    * IS_BUCKET_NAME=[the IS bucket name]
    * IS_BUCKET_KEY=[the IS bucket key]
    * IS_ACCESS_KEY=[the IS access key]
+
+### Push data to a Logstash instance
+1. Create a `.env` file at the project root with the following key-value pairs:
+   * LOGSTASH_HOSTS=[the Logstash DNS/IP address with port Ex) "127.0.0.1:5000,127.0.0.2:5000"]
+      * The Logstash port will default to 8080 if none is provided
+
+### Install sensor_dht11.py as a service
+1. Copy the lab-temperature.service file to the /etc/systemd/system directory
+2. Run systemctl daemon-reload as root
+3. Run systemctl start lab-temperature.service as root
