@@ -1,8 +1,13 @@
 #!/usr/bin/python3
+# Code copied from repo: https://github.com/htquach/RPi-IoT
 import math
 import os
 import time
 from datetime import datetime
+import socket
+import json
+import sys
+import argparse
 
 import RPi.GPIO as GPIO
 import dht11
@@ -10,6 +15,9 @@ from ISStreamer.Streamer import Streamer
 from dotenv import load_dotenv
 
 load_dotenv()
+parser = argparse.ArgumentParser()
+parser.add_argument("logstash_ip_address", help="Logstash IP Address")
+args = parser.parse_args()
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -84,6 +92,34 @@ def stream_to_initalstate(temperature, humidity):
         s.flush()
         s.close()
 
+def sendMessageToLogstash(humidity,temperature,now):
+    LOGSTASH_IP_ADDRESS = args.logstash_ip_address
+    LOGSTASH_IP_ADDRESS = LOGSTASH_IP_ADDRESS.split(':')
+    HOST = LOGSTASH_IP_ADDRESS[0]
+    PORT = int(LOGSTASH_IP_ADDRESS[1])
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    except socket.error as msg:
+        sys.stderr.write("[ERROR] %s\n" % msg[1])
+        return
+
+    try:
+        sock.connect((HOST, PORT))
+    except socket.error as msg:
+        sys.stderr.write("[ERROR] %s\n" % msg[1])
+        return
+
+    msg = {
+        "temperature": temperature,
+        "humidity": humidity,
+        "raspberry-pi-DNS": socket.gethostname(),
+        "datetime": now
+    }
+
+    sock.send(str(json.dumps(msg) ).encode('utf-8') )
+
+    sock.close()
 
 def main():
     print("Start Reading with the following configuration:")
@@ -100,15 +136,16 @@ def main():
         if not math.isclose(temperature, previous_temperature, abs_tol=LOG_IF_CHANGED_BY) \
                 or (LOG_IF_HUMIDITY_CHANGED and not math.isclose(humidity, previous_humidity, abs_tol=LOG_IF_CHANGED_BY)):
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            stream_to_initalstate(temperature, humidity)
+            sendMessageToLogstash(humidity,temperature,now)
+            # stream_to_initalstate(temperature, humidity)
             print("%s %.2f%s %.2f%%" % (now, temperature, "F" if CONVERT_TEMP_TO_F else "C", humidity))
             if CSV_OUT_FILE_NAME:
                 with open(CSV_OUT_FILE_NAME, "a") as d:
                     d.write("%s,%-.2f,%.2f\n" % (now, temperature, humidity))
-
         previous_temperature = temperature
         previous_humidity = humidity
 
 
 if __name__ == "__main__":
     main()
+
