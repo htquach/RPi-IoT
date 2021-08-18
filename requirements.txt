@@ -2,3 +2,4 @@ dht11
 ISStreamer
 python-dotenv
 RPi.GPIO
+requests

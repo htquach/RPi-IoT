@@ -3,6 +3,8 @@ import math
 import os
 import time
 from datetime import datetime
+import platform
+import requests
 
 import RPi.GPIO as GPIO
 import dht11
@@ -25,6 +27,24 @@ LOG_IF_HUMIDITY_CHANGED = False
 IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
 IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
 IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
+
+LOGSTASH_HOSTS = os.getenv("LOGSTASH_HOSTS", "")
+LOGSTASH_DEFAULT_HTTP_PORT = "8080"
+
+logstash_hosts = LOGSTASH_HOSTS.split(",")
+logstash_hosts_ports = []
+for logstash_host in logstash_hosts:
+    host = logstash_host
+    port = LOGSTASH_DEFAULT_HTTP_PORT
+    if logstash_host.count(":") == 1:
+        host, port = logstash_host.split(":")
+        logstash_hosts_ports.append((host.strip(), port.strip()))
+    else:
+        logstash_hosts_ports.append((host.strip(), port))
+
+# Force this const to False to turn off streaming to Logstash
+SKIP_LOGSTASH_STREAM = not logstash_hosts_ports
+
 # Force this const to False to turn off streaming to InitialState
 SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
 
@@ -32,13 +52,6 @@ CSV_OUT_FILE_NAME = "data_%s.csv" % datetime.now().strftime("%Y%m%d%H%M%S")
 if CSV_OUT_FILE_NAME:
     with open(CSV_OUT_FILE_NAME, "w") as c:
         c.write("timestamp,temperature,humidity")
-
-IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
-IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
-IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
-# Force this const to False to turn off streaming to InitialState
-SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
-
 
 def show_consts():
     print("-"*40)
@@ -53,13 +66,12 @@ def show_consts():
     print("IS_BUCKET_KEY = %s" % (("%s********%s" % (IS_BUCKET_KEY[:3], IS_BUCKET_KEY[-1:])) if IS_BUCKET_KEY else ""))
     print("IS_ACCESS_KEY = %s" % (("%s******************************%s" % (IS_ACCESS_KEY[:3], IS_ACCESS_KEY[-3:])) if IS_ACCESS_KEY else ""))
     print("SKIP_IS_STREAM = %s" % SKIP_IS_STREAM)
+    print("SKIP_LOGSTASH_STREAM = %s" % SKIP_LOGSTASH_STREAM)
+    print("LOGSTASH_HOSTS = %s" % logstash_hosts_ports)
     print("-"*40)
-
-
 
 def c2f(c):
     return (c * 9/5) + 32
-
 
 def read_sensor(sensor):
     sample_total_temperature = 0.0
@@ -75,8 +87,7 @@ def read_sensor(sensor):
     humidity = sample_total_humidity / SAMPLE_SIZE
     return humidity, temperature
 
-
-def stream_to_initalstate(temperature, humidity):
+def stream_to_initialstate(temperature, humidity):
     if not SKIP_IS_STREAM:
         s = Streamer(bucket_name=IS_BUCKET_NAME, bucket_key=IS_BUCKET_KEY, access_key=IS_ACCESS_KEY)
         s.log("temperature", "%.2f" % temperature)
@@ -84,6 +95,22 @@ def stream_to_initalstate(temperature, humidity):
         s.flush()
         s.close()
 
+def stream_to_logstash(humidity, temperature, now):
+    if not SKIP_LOGSTASH_STREAM:
+        msg = {
+            "temperature": temperature,
+            "humidity": humidity,
+            "source": platform.node(),
+            "timestamp": now
+        }
+        for host, port in logstash_hosts_ports:
+            try:
+                url = "http://" + host + ":" + port
+                requests.post(url, json=msg, timeout=2.50)
+                return
+            except requests.exceptions.RequestException as error_msg:
+                print("Couldn't Connect To Logstash Host: %s\n" % error_msg)
+        print("Couldn't Successfully Connect To Any Logstash Hosts")
 
 def main():
     print("Start Reading with the following configuration:")
@@ -100,7 +127,8 @@ def main():
         if not math.isclose(temperature, previous_temperature, abs_tol=LOG_IF_CHANGED_BY) \
                 or (LOG_IF_HUMIDITY_CHANGED and not math.isclose(humidity, previous_humidity, abs_tol=LOG_IF_CHANGED_BY)):
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            stream_to_initalstate(temperature, humidity)
+            stream_to_logstash(humidity, temperature, now)
+            stream_to_initialstate(temperature, humidity)
             print("%s %.2f%s %.2f%%" % (now, temperature, "F" if CONVERT_TEMP_TO_F else "C", humidity))
             if CSV_OUT_FILE_NAME:
                 with open(CSV_OUT_FILE_NAME, "a") as d:
@@ -108,7 +136,6 @@ def main():
 
         previous_temperature = temperature
         previous_humidity = humidity
-
 
 if __name__ == "__main__":
     main()
