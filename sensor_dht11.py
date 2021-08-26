@@ -1,20 +1,23 @@
 #!/usr/bin/python3
+#pylint: disable=line-too-long
+"""Reading the DHT11 sensor using a Raspberry Pi"""
 import math
 import os
 import time
 from datetime import datetime
-
-import RPi.GPIO as GPIO
-import dht11
 from ISStreamer.Streamer import Streamer
 from dotenv import load_dotenv
+
+#pylint: disable=import-error
+from RPi import GPIO
+import dht11
 
 load_dotenv()
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.cleanup()
-DHT11_PIN = os.getenv("DHT11_PIN", 24)
+DHT11_PIN = int(os.getenv("DHT11_PIN", "24"))
 
 CONVERT_TEMP_TO_F = True
 SAMPLE_SIZE = 10
@@ -30,7 +33,7 @@ SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
 
 CSV_OUT_FILE_NAME = "data_%s.csv" % datetime.now().strftime("%Y%m%d%H%M%S")
 if CSV_OUT_FILE_NAME:
-    with open(CSV_OUT_FILE_NAME, "w") as c:
+    with open(CSV_OUT_FILE_NAME, "w", encoding="utf-8") as c:
         c.write("timestamp,temperature,humidity")
 
 IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
@@ -41,6 +44,7 @@ SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
 
 
 def show_consts():
+    """Print out all constants"""
     print("-"*40)
     print("DHT11_PIN = %s" % DHT11_PIN)
     print("CONVERT_TEMP_TO_F = %s" % CONVERT_TEMP_TO_F)
@@ -57,13 +61,16 @@ def show_consts():
 
 
 
-def c2f(c):
-    return (c * 9/5) + 32
+def c2f(celsius):
+    """Convert temperature degree from C to F"""
+    return (celsius * 9/5) + 32
 
 
 def read_sensor(sensor):
+    """Reading value from sensor"""
     sample_total_temperature = 0.0
     sample_total_humidity = 0.0
+    #pylint: disable=unused-variable
     for i in range(SAMPLE_SIZE):
         time.sleep(1)
         result = sensor.read()
@@ -77,15 +84,20 @@ def read_sensor(sensor):
 
 
 def stream_to_initalstate(temperature, humidity):
+    """Stream the temperature and humidity values to Initial State bucket"""
     if not SKIP_IS_STREAM:
-        s = Streamer(bucket_name=IS_BUCKET_NAME, bucket_key=IS_BUCKET_KEY, access_key=IS_ACCESS_KEY)
-        s.log("temperature", "%.2f" % temperature)
-        s.log("humidity", "%.2f" % humidity)
-        s.flush()
-        s.close()
+        streamer = Streamer(bucket_name=IS_BUCKET_NAME, bucket_key=IS_BUCKET_KEY, access_key=IS_ACCESS_KEY)
+        streamer.log("temperature", "%.2f" % temperature)
+        streamer.log("humidity", "%.2f" % humidity)
+        streamer.flush()
+        streamer.close()
 
 
 def main():
+    """
+    The program main entry point to start reading data from sensor
+    and stream to different services
+    """
     print("Start Reading with the following configuration:")
     show_consts()
     sensor = dht11.DHT11(pin=DHT11_PIN)
@@ -103,8 +115,8 @@ def main():
             stream_to_initalstate(temperature, humidity)
             print("%s %.2f%s %.2f%%" % (now, temperature, "F" if CONVERT_TEMP_TO_F else "C", humidity))
             if CSV_OUT_FILE_NAME:
-                with open(CSV_OUT_FILE_NAME, "a") as d:
-                    d.write("%s,%-.2f,%.2f\n" % (now, temperature, humidity))
+                with open(CSV_OUT_FILE_NAME, "a", encoding="utf-8") as csv_file:
+                    csv_file.write("%s,%-.2f,%.2f\n" % (now, temperature, humidity))
 
         previous_temperature = temperature
         previous_humidity = humidity
