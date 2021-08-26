@@ -1,3 +1,4 @@
 ISStreamer
 pylint
 python-dotenv
+requests

@@ -3,14 +3,18 @@
 """Reading the DHT11 sensor using a Raspberry Pi"""
 import math
 import os
+import platform
 import time
 from datetime import datetime
+
+import requests
 from ISStreamer.Streamer import Streamer
 from dotenv import load_dotenv
 
-#pylint: disable=import-error
-from RPi import GPIO
+# pylint: disable=import-error
 import dht11
+from RPi import GPIO
+#pylint: enable=import-error
 
 load_dotenv()
 
@@ -29,18 +33,27 @@ IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
 IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
 IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
 # Force this const to False to turn off streaming to InitialState
-SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
+STREAM_TO_INITIAL_STATE = IS_BUCKET_NAME and IS_BUCKET_KEY and IS_ACCESS_KEY
+
+LOGSTASH_HOSTS = os.getenv("LOGSTASH_HOSTS", "")
+LOGSTASH_DEFAULT_HTTP_PORT = "8080"
 
 CSV_OUT_FILE_NAME = "data_%s.csv" % datetime.now().strftime("%Y%m%d%H%M%S")
 if CSV_OUT_FILE_NAME:
     with open(CSV_OUT_FILE_NAME, "w", encoding="utf-8") as c:
         c.write("timestamp,temperature,humidity")
 
-IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
-IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
-IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
-# Force this const to False to turn off streaming to InitialState
-SKIP_IS_STREAM = not IS_BUCKET_NAME or not IS_BUCKET_KEY or not IS_ACCESS_KEY
+
+def parse_hosts(hosts, default_port=LOGSTASH_DEFAULT_HTTP_PORT):
+    """Parse a list commas separated hosts"""
+    hosts_ports = []
+    for logstash_host in hosts.split(","):
+        if logstash_host.count(":") == 1:
+            host, port = logstash_host.split(":")
+            hosts_ports.append((host.strip(), port.strip()))
+        else:
+            hosts_ports.append((logstash_host.strip(), default_port))
+    return hosts_ports
 
 
 def show_consts():
@@ -56,9 +69,9 @@ def show_consts():
     print("IS_BUCKET_NAME = %s" % IS_BUCKET_NAME)
     print("IS_BUCKET_KEY = %s" % (("%s********%s" % (IS_BUCKET_KEY[:3], IS_BUCKET_KEY[-1:])) if IS_BUCKET_KEY else ""))
     print("IS_ACCESS_KEY = %s" % (("%s******************************%s" % (IS_ACCESS_KEY[:3], IS_ACCESS_KEY[-3:])) if IS_ACCESS_KEY else ""))
-    print("SKIP_IS_STREAM = %s" % SKIP_IS_STREAM)
+    print("STREAM_TO_INITIAL_STATE = %s" % STREAM_TO_INITIAL_STATE)
+    print("LOGSTASH_HOSTS = %s" % LOGSTASH_HOSTS)
     print("-"*40)
-
 
 
 def c2f(celsius):
@@ -70,8 +83,7 @@ def read_sensor(sensor):
     """Reading value from sensor"""
     sample_total_temperature = 0.0
     sample_total_humidity = 0.0
-    #pylint: disable=unused-variable
-    for i in range(SAMPLE_SIZE):
+    for _ in range(SAMPLE_SIZE):
         time.sleep(1)
         result = sensor.read()
         while not result.is_valid():
@@ -83,14 +95,33 @@ def read_sensor(sensor):
     return humidity, temperature
 
 
-def stream_to_initalstate(temperature, humidity):
+def stream_to_initialstate(temperature, humidity):
     """Stream the temperature and humidity values to Initial State bucket"""
-    if not SKIP_IS_STREAM:
+    if STREAM_TO_INITIAL_STATE:
         streamer = Streamer(bucket_name=IS_BUCKET_NAME, bucket_key=IS_BUCKET_KEY, access_key=IS_ACCESS_KEY)
         streamer.log("temperature", "%.2f" % temperature)
         streamer.log("humidity", "%.2f" % humidity)
         streamer.flush()
         streamer.close()
+
+
+def stream_to_logstash(humidity, temperature, ls_hosts):
+    """Stream the temperature and humidity values to LogStash HTTP input bucket"""
+    data = {
+        "temperature": temperature,
+        "humidity": humidity,
+        "source": platform.node(),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    for host, port in ls_hosts:
+        try:
+            url = "http://%s:%s" % (host, port)
+            requests.post(url, json=data, timeout=2.50)
+            break
+        except requests.exceptions.RequestException as error_msg:
+            print("Couldn't connect to Logstash host (%s:%s): %s" % (host, port, error_msg))
+    else:
+        print("Couldn't successfully connect to any Logstash host (%s)" % LOGSTASH_HOSTS)
 
 
 def main():
@@ -103,6 +134,8 @@ def main():
     sensor = dht11.DHT11(pin=DHT11_PIN)
     previous_temperature = -999.99
     previous_humidity = -999.99
+    ls_hosts = parse_hosts(LOGSTASH_HOSTS)
+
     while True:
         humidity, temperature = read_sensor(sensor)
 
@@ -112,7 +145,8 @@ def main():
         if not math.isclose(temperature, previous_temperature, abs_tol=LOG_IF_CHANGED_BY) \
                 or (LOG_IF_HUMIDITY_CHANGED and not math.isclose(humidity, previous_humidity, abs_tol=LOG_IF_CHANGED_BY)):
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            stream_to_initalstate(temperature, humidity)
+            stream_to_logstash(humidity, temperature, ls_hosts)
+            stream_to_initialstate(temperature, humidity)
             print("%s %.2f%s %.2f%%" % (now, temperature, "F" if CONVERT_TEMP_TO_F else "C", humidity))
             if CSV_OUT_FILE_NAME:
                 with open(CSV_OUT_FILE_NAME, "a", encoding="utf-8") as csv_file:
