@@ -18,10 +18,13 @@ from RPi import GPIO
 
 load_dotenv()
 
+SENSOR_ID = platform.node()
+
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.cleanup()
 DHT11_PIN = int(os.getenv("DHT11_PIN", "24"))
+
 
 CONVERT_TEMP_TO_F = True
 SAMPLE_SIZE = 10
@@ -38,7 +41,7 @@ STREAM_TO_INITIAL_STATE = IS_BUCKET_NAME and IS_BUCKET_KEY and IS_ACCESS_KEY
 LOGSTASH_HOSTS = os.getenv("LOGSTASH_HOSTS", "")
 LOGSTASH_DEFAULT_HTTP_PORT = "8080"
 
-CSV_OUT_FILE_NAME = "data_%s.csv" % datetime.now().strftime("%Y%m%d%H%M%S")
+CSV_OUT_FILE_NAME = "data_%s_%s.csv" % (SENSOR_ID, datetime.now().strftime("%Y%m%d%H%M%S"))
 if CSV_OUT_FILE_NAME:
     with open(CSV_OUT_FILE_NAME, "w", encoding="utf-8") as c:
         c.write("timestamp,temperature,humidity")
@@ -59,6 +62,7 @@ def parse_hosts(hosts, default_port=LOGSTASH_DEFAULT_HTTP_PORT):
 def show_consts():
     """Print out all constants"""
     print("-"*40)
+    print("SENSOR_ID = %s" % SENSOR_ID)
     print("DHT11_PIN = %s" % DHT11_PIN)
     print("CONVERT_TEMP_TO_F = %s" % CONVERT_TEMP_TO_F)
     print("SAMPLE_SIZE = %s" % SAMPLE_SIZE)
@@ -99,8 +103,8 @@ def stream_to_initialstate(temperature, humidity):
     """Stream the temperature and humidity values to Initial State bucket"""
     if STREAM_TO_INITIAL_STATE:
         streamer = Streamer(bucket_name=IS_BUCKET_NAME, bucket_key=IS_BUCKET_KEY, access_key=IS_ACCESS_KEY)
-        streamer.log("temperature", "%.2f" % temperature)
-        streamer.log("humidity", "%.2f" % humidity)
+        streamer.log("%s_temperature" % SENSOR_ID, "%.2f" % temperature)
+        streamer.log("%s_humidity" % SENSOR_ID, "%.2f" % humidity)
         streamer.flush()
         streamer.close()
 
@@ -110,7 +114,7 @@ def stream_to_logstash(humidity, temperature, ls_hosts):
     data = {
         "temperature": temperature,
         "humidity": humidity,
-        "source": platform.node(),
+        "source": SENSOR_ID,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     for host, port in ls_hosts:
