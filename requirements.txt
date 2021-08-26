@@ -1,5 +1,4 @@
-dht11
 ISStreamer
+pylint
 python-dotenv
-RPi.GPIO
 requests
