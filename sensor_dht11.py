@@ -12,8 +12,8 @@ from ISStreamer.Streamer import Streamer
 from dotenv import load_dotenv
 
 # pylint: disable=import-error
-import dht11
 from RPi import GPIO
+import dht11
 #pylint: enable=import-error
 
 load_dotenv()
@@ -36,15 +36,12 @@ IS_BUCKET_NAME = os.getenv("IS_BUCKET_NAME", "")
 IS_BUCKET_KEY = os.getenv("IS_BUCKET_KEY", "")
 IS_ACCESS_KEY = os.getenv("IS_ACCESS_KEY", "")
 # Force this const to False to turn off streaming to InitialState
-STREAM_TO_INITIAL_STATE = IS_BUCKET_NAME and IS_BUCKET_KEY and IS_ACCESS_KEY
+STREAM_TO_INITIAL_STATE = bool(IS_BUCKET_NAME and IS_BUCKET_KEY and IS_ACCESS_KEY)
 
 LOGSTASH_HOSTS = os.getenv("LOGSTASH_HOSTS", "")
 LOGSTASH_DEFAULT_HTTP_PORT = "8080"
 
 CSV_OUT_FILE_NAME = "data_%s_%s.csv" % (SENSOR_ID, datetime.now().strftime("%Y%m%d%H%M%S"))
-if CSV_OUT_FILE_NAME:
-    with open(CSV_OUT_FILE_NAME, "w", encoding="utf-8") as c:
-        c.write("timestamp,temperature,humidity")
 
 
 def parse_hosts(hosts, default_port=LOGSTASH_DEFAULT_HTTP_PORT):
@@ -59,23 +56,24 @@ def parse_hosts(hosts, default_port=LOGSTASH_DEFAULT_HTTP_PORT):
     return hosts_ports
 
 
-def show_consts():
+def get_consts_values():
     """Print out all constants"""
-    print("-"*40)
-    print("SENSOR_ID = %s" % SENSOR_ID)
-    print("DHT11_PIN = %s" % DHT11_PIN)
-    print("CONVERT_TEMP_TO_F = %s" % CONVERT_TEMP_TO_F)
-    print("SAMPLE_SIZE = %s" % SAMPLE_SIZE)
-    print("LOG_IF_CHANGED_BY = %s" % LOG_IF_CHANGED_BY)
-    print("LOG_IF_HUMIDITY_CHANGED = %s" % LOG_IF_HUMIDITY_CHANGED)
-    print("LOG_IF_TEMPERATURE_CHANGED = %s" % LOG_IF_TEMPERATURE_CHANGED)
-    print("CSV_OUT_FILE_NAME = %s" % CSV_OUT_FILE_NAME)
-    print("IS_BUCKET_NAME = %s" % IS_BUCKET_NAME)
-    print("IS_BUCKET_KEY = %s" % (("%s********%s" % (IS_BUCKET_KEY[:3], IS_BUCKET_KEY[-1:])) if IS_BUCKET_KEY else ""))
-    print("IS_ACCESS_KEY = %s" % (("%s******************************%s" % (IS_ACCESS_KEY[:3], IS_ACCESS_KEY[-3:])) if IS_ACCESS_KEY else ""))
-    print("STREAM_TO_INITIAL_STATE = %s" % STREAM_TO_INITIAL_STATE)
-    print("LOGSTASH_HOSTS = %s" % LOGSTASH_HOSTS)
-    print("-"*40)
+    message = ["-"*40]
+    message.append("SENSOR_ID = %s" % SENSOR_ID)
+    message.append("DHT11_PIN = %s" % DHT11_PIN)
+    message.append("CONVERT_TEMP_TO_F = %s" % CONVERT_TEMP_TO_F)
+    message.append("SAMPLE_SIZE = %s" % SAMPLE_SIZE)
+    message.append("LOG_IF_CHANGED_BY = %s" % LOG_IF_CHANGED_BY)
+    message.append("LOG_IF_HUMIDITY_CHANGED = %s" % LOG_IF_HUMIDITY_CHANGED)
+    message.append("LOG_IF_TEMPERATURE_CHANGED = %s" % LOG_IF_TEMPERATURE_CHANGED)
+    message.append("CSV_OUT_FILE_NAME = %s" % CSV_OUT_FILE_NAME)
+    message.append("IS_BUCKET_NAME = %s" % IS_BUCKET_NAME)
+    message.append("IS_BUCKET_KEY = %s" % (("%s********%s" % (IS_BUCKET_KEY[:3], IS_BUCKET_KEY[-1:])) if IS_BUCKET_KEY else ""))
+    message.append("IS_ACCESS_KEY = %s" % (("%s******************************%s" % (IS_ACCESS_KEY[:3], IS_ACCESS_KEY[-3:])) if IS_ACCESS_KEY else ""))
+    message.append("STREAM_TO_INITIAL_STATE = %s" % STREAM_TO_INITIAL_STATE)
+    message.append("LOGSTASH_HOSTS = %s" % LOGSTASH_HOSTS)
+    message.append("-"*40)
+    return message
 
 
 def c2f(celsius):
@@ -134,7 +132,13 @@ def main():
     and stream to different services
     """
     print("Start Reading with the following configuration:")
-    show_consts()
+    print("\n".join(get_consts_values()))
+    if CSV_OUT_FILE_NAME:
+        with open(CSV_OUT_FILE_NAME, "a", encoding="utf-8") as csv_file:
+            csv_file.write("\n".join(get_consts_values()))
+            csv_file.write("\n")
+            csv_file.write("timestamp,temperature,humidity\n")
+
     sensor = dht11.DHT11(pin=DHT11_PIN)
     previous_temperature = -999.99
     previous_humidity = -999.99
@@ -155,9 +159,8 @@ def main():
             if CSV_OUT_FILE_NAME:
                 with open(CSV_OUT_FILE_NAME, "a", encoding="utf-8") as csv_file:
                     csv_file.write("%s,%-.2f,%.2f\n" % (now, temperature, humidity))
-
-        previous_temperature = temperature
-        previous_humidity = humidity
+            previous_temperature = temperature
+            previous_humidity = humidity
 
 
 if __name__ == "__main__":
