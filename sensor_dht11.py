@@ -48,7 +48,9 @@ def parse_hosts(hosts, default_port=LOGSTASH_DEFAULT_HTTP_PORT):
     """Parse a list commas separated hosts"""
     hosts_ports = []
     for logstash_host in hosts.split(","):
-        if logstash_host.count(":") == 1:
+        if not logstash_host:
+            continue
+        elif logstash_host.count(":") == 1:
             host, port = logstash_host.split(":")
             hosts_ports.append((host.strip(), port.strip()))
         else:
