@@ -23,15 +23,29 @@ Example:
 LOGSTASH_HOSTS="127.0.0.1:8080,127.0.0.2:8080"
 `
 
-### Reading data 
-1. `sudo apt-get update && sudo apt-get upgrade`
-2. `sudo apt-get install -y git python3-pip screen`
-3. `git clone https://github.com/htquach/RPi-IoT`
-4. `cd RPi-IoT/`
-5. `pip3 install -r requirements.txt -r requirements_raspi.txt`
-6. `screen -S RPi-IoT python3 sensor_dht11.py`
+### Update OS and install tools
+
+```sh
+sudo apt-get update && sudo apt-get upgrade
+sudo apt-get install -y git python3-pip screen
+```
+
+### Reading data
+```sh
+git clone https://github.com/htquach/RPi-IoT
+cd RPi-IoT/
+pip3 install -r requirements.txt -r requirements_raspi.txt
+screen -S RPi-IoT python3 sensor_dht11.py
+```
 
 ### Install sensor_dht11.py as a service
-1. Copy the sensor_dht11 service file to the `/etc/systemd/system` directory
-2. Run `systemctl daemon-reload` as root
-3. Run `systemctl start sensor_dht11.service` as root
+
+Run the following commands as root `sudo -i`
+
+```sh
+cp sensor_dht11.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl start sensor_dht11.service
+systemctl status sensor_dht11.service
+systemctl enable sensor_dht11.service
+```
